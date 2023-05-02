@@ -1,5 +1,6 @@
 (ns clj-depend.analyzer
-  (:require [clj-depend.dependency :as dependency]))
+  (:require [clj-depend.dependency :as dependency]
+            [clj-depend.dot :refer [dot]]))
 
 (defn- layer-cannot-access-dependency-layer?
   [config layer dependency-layer]
@@ -22,15 +23,20 @@
   [config namespace layer]
   (let [namespaces (get-in config [:layers layer :namespaces])
         defined-by (get-in config [:layers layer :defined-by])]
-    (or (some #{namespace}  namespaces)
+    (or (some #{(str namespace)} namespaces)
         (when defined-by (re-find (re-pattern defined-by) (str namespace))))))
 
 (defn- layer-by-namespace
   [config namespace]
   (some #(when (namespace-belongs-to-layer? config namespace %) %) (keys (:layers config))))
 
+(def print-style :dot) ; options are :ns-only, :with-layer, :dot
+
 (defn- layer-and-namespace [config namespace dependency-namespace]
   (when-let [layer (layer-by-namespace config namespace)]
+    (when (= print-style :with-layer)
+      (println (str namespace layer) "->"
+               (str dependency-namespace (layer-by-namespace config dependency-namespace))))
     {:namespace            namespace
      :layer                layer
      :dependency-namespace dependency-namespace
@@ -39,6 +45,8 @@
 (defn- violations
   [config dependency-graph namespace]
   (let [dependencies (dependency/immediate-dependencies dependency-graph namespace)]
+    (when (= print-style :ns-only)
+      (doseq [dep dependencies] (println namespace "->" dep)))
     (->> dependencies
          (map #(layer-and-namespace config namespace %))
          (filter #(violate? config %))
@@ -47,6 +55,8 @@
 (defn analyze
   "Analyze namespaces dependencies."
   [{:keys [config namespaces dependency-graph]}]
+  (when (= print-style :dot)
+    (dot config namespaces #(dependency/immediate-dependencies dependency-graph %) layer-by-namespace))
   (let [violations (flatten (keep #(violations config dependency-graph %) namespaces))]
     (map (fn [{:keys [namespace dependency-namespace layer dependency-layer]}]
            {:namespace namespace

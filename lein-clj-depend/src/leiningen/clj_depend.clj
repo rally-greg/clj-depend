@@ -12,7 +12,7 @@
 (defn- run!
   [project & args]
   (let [result (apply clj-depend.main/run! (project->args project args))]
-    (when-let [message (:message result)]
+    #_(when-let [message (:message result)]
       (println message))
     (when (not= 0 (:result-code result))
       (leiningen.core/exit (:result-code result)))))
